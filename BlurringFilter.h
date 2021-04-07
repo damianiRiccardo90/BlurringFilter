@@ -49,6 +49,7 @@ static const RGB RED;
 static const RGB GREEN;
 static const RGB BLUE;
 
+// TODO Change this into "RGBA"
 class ARGB : public IPixel
 {
 public:
@@ -87,20 +88,34 @@ struct GaussianBlur : public IBlurStrategy
 
 enum class TGAFormat : uint8_t
 {
-	FMT_ORIGIN,
-	FMT_NEW,
-	FMT_NONE
+	ORIGIN,
+	NEW,
+	NONE
 };
 
 enum class TGAImageType : uint8_t
 {
-	TYPE_COLOR_MAPPED = 0x01,
-	TYPE_TRUE_COLOR = 0x02,
-	TYPE_BLACK_AND_WHITE = 0x03,
-	TYPE_COLOR_MAPPED_RLE = 0x09,
-	TYPE_TRUE_COLOR_RLE = 0x0A,
-	TYPE_BLACK_AND_WHITE_RLE = 0x0B,
-	TYPE_NONE = 0xFF
+	EMPTY = 0x00,
+	COLOR_MAPPED = 0x01,
+	TRUE_COLOR = 0x02,
+	MONO = 0x03,
+	COLOR_MAPPED_RLE = 0x09,
+	TRUE_COLOR_RLE = 0x0A,
+	MONO_RLE = 0x0B
+};
+
+enum class TGAHorizOrientation : uint8_t
+{
+	LEFT_TO_RIGHT,
+	RIGHT_TO_LEFT,
+	NONE
+};
+
+enum class TGAVertOrientation : uint8_t
+{
+	TOP_DOWN,
+	BOTTOM_UP,
+	NONE
 };
 
 // Based on https://en.wikipedia.org/wiki/Truevision_TGA#Header
@@ -122,14 +137,6 @@ struct TGAHeader
 	uint16_t image_height;
 	uint8_t  pixel_depth;
 	uint8_t  image_descriptor;
-};
-
-// Based on https://en.wikipedia.org/wiki/Truevision_TGA#Header
-struct TGAData 
-{
-	uint8_t* image_id = nullptr;
-	uint8_t* color_map = nullptr;
-	uint8_t* image_data = nullptr;
 };
 
 struct TGAFooter
@@ -155,6 +162,7 @@ public:
 	void blur(float factor, IBlurStrategy* blur_algo = new BoxBlur);
 
 	static const std::string SIGNATURE;
+	static const int SIGNATURE_SIZE;
 	static const std::string TYPE_COLOR_MAPPED_NAME;
 	static const std::string TYPE_TRUE_COLOR_NAME;
 	static const std::string TYPE_BLACK_AND_WHITE_NAME;
@@ -175,8 +183,10 @@ private:
 	const uint8_t* out_buffer = nullptr;
 	int buffer_size;
 
-	TGAFormat format = TGAFormat::FMT_NONE;
-	TGAImageType image_type = TGAImageType::TYPE_NONE;
+	TGAFormat format = TGAFormat::NONE;
+	TGAImageType image_type = TGAImageType::EMPTY;
+	TGAHorizOrientation horiz_orient = TGAHorizOrientation::NONE;
+	TGAVertOrientation vert_orient = TGAVertOrientation::NONE;
 
 	TGAHeader header;
 	TGAFooter footer;
