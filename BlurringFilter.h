@@ -4,87 +4,33 @@
 using std::fstream
 
 
-// Trying to use CRTP and operator overloading helpers to improve performance using only static casting (THEOBOWLYA)(Barton–Nackman trick) FAILED MISERABLY
-struct IPixel
+struct RGBA
 {
-	friend bool operator == (const IPixel& lhs, const IPixel& rhs);
-	friend bool operator != (const IPixel& lhs, const IPixel& rhs);
-	IPixel& operator += (const IPixel& rhs);
-	friend IPixel& operator + (IPixel& lhs, const IPixel& rhs);
-	IPixel& operator -= (const IPixel& rhs);
-	friend IPixel& operator - (IPixel& lhs, const IPixel& rhs);
-	IPixel& operator *= (const IPixel& rhs);
-	friend IPixel& operator * (IPixel& lhs, const IPixel& rhs);
+	RGBA();
+	RGBA(float c, float a);
+	RGBA(float r, float g, float b, float a);
 
-	virtual bool equal_to(const IPixel& rhs) const = 0;
-	virtual IPixel& add(const IPixel& rhs) = 0;
-	virtual IPixel& subtract(const IPixel& rhs) = 0;
-	virtual IPixel& multiply(const IPixel& rhs) = 0;
-};
-
-class RGB : public IPixel
-{
-public:
-
-	RGB();
-	RGB(float c);
-	RGB(float r, float g, float b);
-
-	bool equal_to(const IPixel& rhs) const override;
-	RGB& add(const IPixel& rhs) override;
-	RGB& subtract(const IPixel& rhs) override;
-	RGB& multiply(const IPixel& rhs) override;
-
-private:
+	friend bool operator == (const RGBA& lhs, const RGBA& rhs);
+	friend bool operator != (const RGBA& lhs, const RGBA& rhs);
+	RGBA& operator += (const RGBA& rhs);
+	friend RGBA& operator + (RGBA& lhs, const RGBA& rhs);
+	RGBA& operator -= (const RGBA& rhs);
+	friend RGBA& operator - (RGBA& lhs, const RGBA& rhs);
+	RGBA& operator *= (const RGBA& rhs);
+	friend RGBA& operator * (RGBA& lhs, const RGBA& rhs);
 
 	float red; 
 	float green; 
 	float blue;
+	float alpha;
 };
 
 // Preset colors
-static const RGB BLACK;
-static const RGB WHITE;
-static const RGB RED;
-static const RGB GREEN;
-static const RGB BLUE;
-
-// TODO Change this into "RGBA"
-class ARGB : public IPixel
-{
-public:
-
-	ARGB();
-	ARGB(float a, float c);
-	ARGB(float a, float r, float g, float b);
-
-	bool equal_to(const IPixel& rhs) const override;
-	ARGB& add(const IPixel& rhs);
-	ARGB& subtract(const IPixel& rhs);
-	ARGB& multiply(const IPixel& rhs);
-
-private:
-
-	float alpha;
-	float red;
-	float green;
-	float blue;
-};
-
-struct IBlurStrategy
-{
-	virtual void blur_image(float factor, IPixel* pixels) =0;
-};
-
-struct BoxBlur : public IBlurStrategy
-{
-	void blur_image(float factor, IPixel* pixels) override;
-};
-
-struct GaussianBlur : public IBlurStrategy
-{
-	void blur_image(float factor, IPixel* pixels) override;
-};
+static const RGBA BLACK;
+static const RGBA WHITE;
+static const RGBA RED;
+static const RGBA GREEN;
+static const RGBA BLUE;
 
 enum class TGAFormat : uint8_t
 {
@@ -159,7 +105,7 @@ public:
 	void parse(const std::string& path);
 	void write(const std::string& path);
 
-	void blur(float factor, IBlurStrategy* blur_algo = new BoxBlur);
+	void blur(float factor);
 
 	static const std::string SIGNATURE;
 	static const int SIGNATURE_SIZE;
@@ -191,5 +137,5 @@ private:
 	TGAHeader header;
 	TGAFooter footer;
 	
-	IPixel* pixels = nullptr; // 1D array of pixels
+	RGBA* pixels = nullptr; // 1D array of pixels
 };

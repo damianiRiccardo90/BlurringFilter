@@ -3,137 +3,68 @@
 #include <string>
 
 
-bool operator == (const IPixel& lhs, const IPixel& rhs) 
-{ 
-	return lhs.equal_to(rhs); 
-}
+RGBA::RGBA() : red(0.f), green(0.f), blue(0.f), alpha(1.f) {}
+RGBA::RGBA(float c, float a) : red(c), green(c), blue(c), alpha(a) {}
+RGBA::RGBA(float r, float g, float b, float a) : red(r), green(g), blue(b), alpha(a) {}
 
-bool operator != (const IPixel& lhs, const IPixel& rhs) 
-{ 
-	return !(lhs == rhs); 
-}
-
-IPixel& IPixel::operator += (const IPixel& rhs) 
-{ 
-	return this->add(rhs); 
-}
-
-IPixel& operator + (IPixel& lhs, const IPixel& rhs) 
-{ 
-	return lhs += rhs; 
-}
-
-IPixel& IPixel::operator -= (const IPixel& rhs) 
-{ 
-	return this->subtract(rhs); 
-}
-
-IPixel& operator - (IPixel& lhs, const IPixel& rhs) 
-{ 
-	return lhs -= rhs; 
-}
-
-IPixel& IPixel::operator *= (const IPixel& rhs) 
-{ 
-	return this->multiply(rhs); 
-}
-
-IPixel& operator * (IPixel& lhs, const IPixel& rhs) 
-{ 
-	return lhs *= rhs; 
-}
-
-RGB::RGB() : red(0.f), green(0.f), blue(0.f) {}
-RGB::RGB(float c) : red(c), green(c), blue(c) {}
-RGB::RGB(float r, float g, float b) : red(r), green(g), blue(b) {}
-
-bool RGB::equal_to(const IPixel& rhs) const
+friend bool operator == (const RGBA& lhs, const RGBA& rhs)
 {
-	const RGB& casted_rhs = static_cast<const RGB&>(rhs);
-	return red == casted_rhs.red && green == casted_rhs.green && blue == casted_rhs.blue;
+	return lhs.red == rhs.red && lhs.green == rhs.green &&
+		lhs.blue == rhs.blue && lhs.alpha == rhs.alpha;
 }
 
-RGB& RGB::add(const IPixel& rhs)
+friend bool operator != (const RGBA& lhs, const RGBA& rhs)
 {
-	const RGB& casted_rhs = static_cast<const RGB&>(rhs);
-	red += casted_rhs.red;
-	green += casted_rhs.green;
-	blue += casted_rhs.blue;
+	return !(lhs == rhs);
+}
+
+RGBA::RGBA& RGBA::operator += (const RGBA& rhs)
+{
+	red += rhs.red;
+	green += rhs.green;
+	blue += rhs.blue;
+	alpha += rhs.alpha;
 	return *this;
 }
 
-RGB& RGB::subtract(const IPixel& rhs)
+friend RGBA& operator + (RGBA& lhs, const RGBA& rhs)
 {
-	const RGB& casted_rhs = static_cast<const RGB&>(rhs);
-	red -= casted_rhs.red;
-	green -= casted_rhs.green;
-	blue -= casted_rhs.blue;
+	return lhs += rhs;
+}
+
+RGBA::RGBA& RGBA::operator -= (const RGBA& rhs)
+{
+	red -= rhs.red;
+	green -= rhs.green;
+	blue -= rhs.blue;
+	alpha -= rhs.alpha;
 	return *this;
 }
 
-RGB& RGB::multiply(const IPixel& rhs)
+friend RGBA& operator - (RGBA& lhs, const RGBA& rhs)
 {
-	const RGB& casted_rhs = static_cast<const RGB&>(rhs);
-	red *= casted_rhs.red;
-	green *= casted_rhs.green;
-	blue *= casted_rhs.blue;
+	return lhs -= rhs;
+}
+
+RGBA::RGBA& RGBA::operator *= (const RGBA& rhs)
+{
+	red *= rhs.red;
+	green *= rhs.green;
+	blue *= rhs.blue;
+	alpha *= rhs.alpha;
 	return *this;
 }
 
-const RGB BLACK = RGB(0);
-const RGB WHITE = RGB(1);
-const RGB RED   = RGB(1, 0, 0);
-const RGB GREEN = RGB(0, 1, 0);
-const RGB BLUE  = RGB(0, 0, 1);
-
-ARGB::ARGB() : alpha(0.f), r(0.f), g(0.f), b(0.f) {}
-ARGB::ARGB(float a, float c) : alpha(a), red(c), green(c), blue(c) {}
-ARGB::ARGB(float a, float r, float g, float b) : alpha(a), red(r), green(g), blue(b) {}
-
-bool ARGB::equal_to(const IPixel& rhs) const
+friend RGBA& operator * (RGBA& lhs, const RGBA& rhs)
 {
-	const ARGB& casted_rhs = static_cast<const ARGB&>(rhs);
-	return alpha == casted_rhs.alpha && red == casted_rhs.red &&
-		   green == casted_rhs.green && blue == casted_rhs.blue;
+	return lhs *= rhs;
 }
 
-ARGB& ARGB::add(const IPixel& rhs)
-{
-	const ARGB& casted_rhs = static_cast<const ARGB&>(rhs);
-	red += casted_rhs.red;
-	green += casted_rhs.green;
-	blue += casted_rhs.blue;
-	return *this;
-}
-
-ARGB& ARGB::subtract(const IPixel& rhs)
-{
-	const ARGB& casted_rhs = static_cast<const ARGB&>(rhs);
-	red -= casted_rhs.red;
-	green -= casted_rhs.green;
-	blue -= casted_rhs.blue;
-	return *this;
-}
-
-ARGB& ARGB::multiply(const IPixel& rhs)
-{
-	const ARGB& casted_rhs = static_cast<const ARGB&>(rhs);
-	red *= casted_rhs.red;
-	green *= casted_rhs.green;
-	blue *= casted_rhs.blue;
-	return *this;
-}
-
-void BoxBlur::blur_image(float factor, IPixel* pixels)
-{
-	//TODO Implement BoxBlur::blur_image
-	IPixel
-}
-
-void GaussianBlur::blur_image(float factor, IPixel* pixels)
-{
-	//TODO Implement GaussianBlur::blur_image
-}
+const RGBA BLACK = RGBA(0, 1);
+const RGBA WHITE = RGBA(1, 1);
+const RGBA RED   = RGBA(1, 0, 0, 1);
+const RGBA GREEN = RGBA(0, 1, 0, 1);
+const RGBA BLUE  = RGBA(0, 0, 1, 1);
 
 TGA::TGA(const std::string& path)
 {
@@ -226,11 +157,44 @@ void TGA::write(const std::string& path)
 	}
 }
 
-void TGA::blur(float factor, IBlurStrategy* blur_algo)
+void TGA::blur(float factor)
 {
-	if (blur_algo)
+	// Blur the image using box blur algorithm (with precomputed SAT optimization)
+
+	if (pixels)
 	{
-		blur_algo->blur_image(factor, pixels);
+		// Summed Area Table algorithm (using dynamic programming)
+		const int image_height = static_cast<int>(header.image_height);
+		const int image_width = static_cast<int>(header.image_width);
+		// Contains the sum of all the source pixels from 0, 0 to x, y.
+		RGBA* SAT = new RGBA[image_width][image_height];
+		for (int p = 0; p < image_height * image_width; p++)
+		{
+			for (int i = 0; i < image_height; i++)
+			{
+				for (int j = 0; j < image_width; j++)
+				{
+					if (i > 0 && j > 0)
+					{
+						pre[i][j] = pixels[i][j] + pre[i - 1][j] + pre[i][j - 1] - pre[i - 1][j - 1];
+					}
+					else if (i > 0 && j == 0)
+					{
+						pre[i][j] = arr[i][j] + pre[i - 1][j];
+					}
+					else if (j > 0 && i == 0)
+					{
+						pre[i][j] = arr[i][j] + pre[i][j - 1];
+					}
+					else
+					{
+						pre[i][j] = arr[i][j];
+					}
+					SAT[i * image_width + ]
+				}
+			}
+		}
+
 	}
 }
 
@@ -311,14 +275,8 @@ void TGA::parse_data()
 		const int image_width = static_cast<int>(header.image_width);
 		const int image_height = static_cast<int>(header.image_height);
 		const int bytes_per_pixel = header.pixel_depth / 8;
-		if (bytes_per_pixel == 4)
-		{
-			pixels = new ARGB[image_width * image_height];
-		}
-		else
-		{
-			pixels = new RGB[image_width * image_height];
-		}
+
+		pixels = new ARGB[image_width * image_height];
 
 		int i = vert_orient == TGAVertOrientation::TOP_DOWN ? 0 : image_height - 1;
 		while (i != vert_orient == TGAVertOrientation::TOP_DOWN ? image_height : -1)
@@ -329,23 +287,13 @@ void TGA::parse_data()
 				const int curr_pixel_offset = start_offset + (i * image_width + j) * bytes_per_pixel;
 				if (pixels)
 				{
-					if (bytes_per_pixel == 4)
-					{ // The order in which the color bytes are displaced is BGRA TODO ARE YOU SURE??
-						pixels[i * image_width + j] = ARBG(
-							(curr_pixel_offset + 3) / 255.f,
-							(curr_pixel_offset + 2) / 255.f,
-							curr_pixel_offset / 255.f,
-							(curr_pixel_offset + 1) / 255.f
-						);
-					}
-					else
-					{ // The order in which the color bytes are displaced is BGR TODO ARE YOU SURE??
-						pixels[i * image_width + j] = RBG(
-							(curr_pixel_offset + 2) / 255.f,
-							curr_pixel_offset / 255.f,
-							(curr_pixel_offset + 1) / 255.f
-						);
-					}
+					// The order in which the color bytes are displaced is BGRA TODO ARE YOU SURE??
+					pixels[i * image_width + j] = RGBA(
+						(curr_pixel_offset + 2) / 255.f,
+						(curr_pixel_offset + 1) / 255.f,
+						curr_pixel_offset / 255.f,
+						bytes_per_pixel == 4 ? (curr_pixel_offset + 3) / 255.f : 1.f
+					);
 				}
 
 				horiz_orient == TGAHorizOrientation::LEFT_TO_RIGHT ? j++ : j--;
@@ -462,6 +410,10 @@ void TGA::write_data()
 					if (bytes_per_pixel == 4)
 					{
 						out_buffer[curr_pixel_offset + 3] = static_cast<uint8_t>(std::min(1.f, pixels[i * image_width + j].alpha) * 255.f);
+					}
+					else
+					{
+						out_buffer[curr_pixel_offset + 3] = 0xFF;
 					}
 				}
 
