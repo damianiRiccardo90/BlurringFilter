@@ -101,6 +101,7 @@ public:
 
 	TGAImageType get_image_type() const;
 	std::string get_image_type_name() const;
+	RGBA* get_mirror_padded_image(const int pad) const;
 
 	void parse(const std::string& path);
 	void write(const std::string& path);

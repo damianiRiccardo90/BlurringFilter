@@ -10,7 +10,7 @@ RGBA::RGBA(float r, float g, float b, float a) : red(r), green(g), blue(b), alph
 friend bool operator == (const RGBA& lhs, const RGBA& rhs)
 {
 	return lhs.red == rhs.red && lhs.green == rhs.green &&
-		lhs.blue == rhs.blue && lhs.alpha == rhs.alpha;
+		   lhs.blue == rhs.blue && lhs.alpha == rhs.alpha;
 }
 
 friend bool operator != (const RGBA& lhs, const RGBA& rhs)
@@ -23,7 +23,6 @@ RGBA::RGBA& RGBA::operator += (const RGBA& rhs)
 	red += rhs.red;
 	green += rhs.green;
 	blue += rhs.blue;
-	alpha += rhs.alpha;
 	return *this;
 }
 
@@ -37,7 +36,6 @@ RGBA::RGBA& RGBA::operator -= (const RGBA& rhs)
 	red -= rhs.red;
 	green -= rhs.green;
 	blue -= rhs.blue;
-	alpha -= rhs.alpha;
 	return *this;
 }
 
@@ -51,7 +49,6 @@ RGBA::RGBA& RGBA::operator *= (const RGBA& rhs)
 	red *= rhs.red;
 	green *= rhs.green;
 	blue *= rhs.blue;
-	alpha *= rhs.alpha;
 	return *this;
 }
 
@@ -106,6 +103,66 @@ std::string TGA::get_image_type_name() const
 	}
 }
 
+RGBA* TGA::get_mirror_padded_image(const int pad) const
+{
+	//TODO Optimize using unsigned int and storing the info already casted in the header struct
+
+	const int image_height = static_cast<int>(header.image_height);
+	const int image_width = static_cast<int>(header.image_width);
+	if (pad > image_height || pad > image_width)
+	{
+		throw std::invalid_argument("Pad size cannot exceed the dimensions of the image");
+	}
+
+	const int padded_img_height = image_height + 2 * pad;
+	const int padded_img_width = image_width + 2 * pad;
+	RGBA* padded_img = new RGBA[padded_img_width * padded_img_height];
+	if (padded_img && pixels)
+	{
+		for (int i = 0; i < padded_img_height; i++)
+		{
+			int mirr_i = 0;
+			if (i < pad)
+			{
+				// Top pad
+				mirr_i = pad - i;
+			}
+			else if (i < pad + image_height)
+			{
+				// Middle
+				mirr_i = i - pad;
+			}
+			else
+			{
+				// Bottom pad
+				mirr_i = image_height - 1 - (i - (pad + image_height) + 1);
+			}
+			for (int j = 0; j < padded_img_width; j++)
+			{
+				int mirr_j = 0;
+				if (j < pad)
+				{
+					// Left pad
+					mirr_j = pad - j;
+				}
+				else if (j < pad + image_width)
+				{
+					// Middle
+					mirr_j = j - pad;
+				}
+				else
+				{
+					// Right pad
+					mirr_j = image_width - 1 - (j - (pad + image_width) + 1);
+				}
+
+				padded_img[i * padded_img_width + j] = pixels[mirr_i * image_width + mirr_j];
+			}
+		}
+	}
+	return padded_img;
+}
+
 void TGA::parse(const std::string& path)
 {
 	std::ifstream ifs(path, std::ios::binary | std::ios::ate);
@@ -157,44 +214,76 @@ void TGA::write(const std::string& path)
 	}
 }
 
+// Blur the image using box blur algorithm (with precomputed SAT optimization)
 void TGA::blur(float factor)
 {
-	// Blur the image using box blur algorithm (with precomputed SAT optimization)
+	if (factor < 0.f || factor > 1.f)
+	{
+		throw std::invalid_argument("Invalid blur factor (it needs to be in the 0 < f < 1 range)");
+	}
 
-	if (pixels)
+	const int image_height = static_cast<int>(header.image_height);
+	const int image_width = static_cast<int>(header.image_width);
+	
+	// Linear interpolation between RANGE1(factor): 0 < x < 1 and RANGE2(kernel diameter): 
+	// 0 < y < min(image_width, image_height)
+	int kernel_size_range = min(image_height, image_width);
+	int kernel_size = static_cast<int>(round(kernel_size_range * factor));
+
+	if (kernel_size % 2 == 0)
+	{
+		// Having only odd values is required
+		kernel_size--;
+	}
+
+	if (kernel_size <= 0)
+	{
+		return;
+	}
+
+	const int pad = ceil(kernel_size / 2);
+	RGBA* padded_img = get_mirror_padded_image(pad);
+	if (padded_img && pixels)
 	{
 		// Summed Area Table algorithm (using dynamic programming)
-		const int image_height = static_cast<int>(header.image_height);
-		const int image_width = static_cast<int>(header.image_width);
-		// Contains the sum of all the source pixels from 0, 0 to x, y.
-		RGBA* SAT = new RGBA[image_width][image_height];
-		for (int p = 0; p < image_height * image_width; p++)
+		const int padded_img_height = image_height + 2 * pad;
+		const int padded_img_width = image_width + 2 * pad;
+		for (int i = 0; i < padded_img_height; i++)
 		{
-			for (int i = 0; i < image_height; i++)
+			for (int j = 0; j < padded_img_width; j++)
 			{
-				for (int j = 0; j < image_width; j++)
+				if (i > 0 && j > 0)
 				{
-					if (i > 0 && j > 0)
-					{
-						pre[i][j] = pixels[i][j] + pre[i - 1][j] + pre[i][j - 1] - pre[i - 1][j - 1];
-					}
-					else if (i > 0 && j == 0)
-					{
-						pre[i][j] = arr[i][j] + pre[i - 1][j];
-					}
-					else if (j > 0 && i == 0)
-					{
-						pre[i][j] = arr[i][j] + pre[i][j - 1];
-					}
-					else
-					{
-						pre[i][j] = arr[i][j];
-					}
-					SAT[i * image_width + ]
+					padded_img[i * padded_img_width + j] = padded_img[i * padded_img_width + j] +
+														   padded_img[(i - 1) * padded_img_width + j] +
+														   padded_img[i * padded_img_width + (j - 1)] -
+														   padded_img[(i - 1) * padded_img_width + (j - 1)];
+				}
+				else if (i > 0 && j == 0)
+				{
+					padded_img[i * padded_img_width + j] = padded_img[i * padded_img_width + j] +
+														   padded_img[(i - 1) * padded_img_width + j];
+				}
+				else if (j > 0 && i == 0)
+				{
+					padded_img[i * padded_img_width + j] = padded_img[i * padded_img_width + j] +
+														   padded_img[i * padded_img_width + (j - 1)];
+				}
+				else
+				{
+					padded_img[i * padded_img_width + j] = padded_img[i * padded_img_width + j];
 				}
 			}
 		}
 
+		// Filtering the image using a constant value (of 1) kernel
+		for (int i = 0; i < image_width; i++)
+		{
+			for (int j = 0; j < image_height; j++)
+			{
+				pixels[i * image_width + j] = ;
+			}
+		}
 	}
 }
 
@@ -276,7 +365,7 @@ void TGA::parse_data()
 		const int image_height = static_cast<int>(header.image_height);
 		const int bytes_per_pixel = header.pixel_depth / 8;
 
-		pixels = new ARGB[image_width * image_height];
+		pixels = new RGBA[image_width * image_height];
 
 		int i = vert_orient == TGAVertOrientation::TOP_DOWN ? 0 : image_height - 1;
 		while (i != vert_orient == TGAVertOrientation::TOP_DOWN ? image_height : -1)
