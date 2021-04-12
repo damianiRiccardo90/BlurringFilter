@@ -1,24 +1,27 @@
 #include "BlurringFilter.h"
-#include <format>
+#include <fstream> 
+#include <stdexcept>
+#include <stdio.h>
 #include <string>
+#include <algorithm>
 
 
 RGBA::RGBA() : red(0.f), green(0.f), blue(0.f), alpha(1.f) {}
 RGBA::RGBA(float c, float a) : red(c), green(c), blue(c), alpha(a) {}
 RGBA::RGBA(float r, float g, float b, float a) : red(r), green(g), blue(b), alpha(a) {}
 
-friend bool operator == (const RGBA& lhs, const RGBA& rhs)
+bool operator == (const RGBA& lhs, const RGBA& rhs)
 {
 	return lhs.red == rhs.red && lhs.green == rhs.green &&
 		   lhs.blue == rhs.blue && lhs.alpha == rhs.alpha;
 }
 
-friend bool operator != (const RGBA& lhs, const RGBA& rhs)
+bool operator != (const RGBA& lhs, const RGBA& rhs)
 {
 	return !(lhs == rhs);
 }
 
-RGBA::RGBA& RGBA::operator += (const RGBA& rhs)
+RGBA& RGBA::operator += (const RGBA& rhs)
 {
 	red += rhs.red;
 	green += rhs.green;
@@ -26,12 +29,12 @@ RGBA::RGBA& RGBA::operator += (const RGBA& rhs)
 	return *this;
 }
 
-friend RGBA& operator + (RGBA& lhs, const RGBA& rhs)
+RGBA& operator + (RGBA& lhs, const RGBA& rhs)
 {
 	return lhs += rhs;
 }
 
-RGBA::RGBA& RGBA::operator -= (const RGBA& rhs)
+RGBA& RGBA::operator -= (const RGBA& rhs)
 {
 	red -= rhs.red;
 	green -= rhs.green;
@@ -39,12 +42,12 @@ RGBA::RGBA& RGBA::operator -= (const RGBA& rhs)
 	return *this;
 }
 
-friend RGBA& operator - (RGBA& lhs, const RGBA& rhs)
+RGBA& operator - (RGBA& lhs, const RGBA& rhs)
 {
 	return lhs -= rhs;
 }
 
-RGBA::RGBA& RGBA::operator *= (const RGBA& rhs)
+RGBA& RGBA::operator *= (const RGBA& rhs)
 {
 	red *= rhs.red;
 	green *= rhs.green;
@@ -52,16 +55,30 @@ RGBA::RGBA& RGBA::operator *= (const RGBA& rhs)
 	return *this;
 }
 
-friend RGBA& operator * (RGBA& lhs, const RGBA& rhs)
+RGBA& operator * (RGBA& lhs, const RGBA& rhs)
 {
 	return lhs *= rhs;
 }
 
-const RGBA BLACK = RGBA(0, 1);
-const RGBA WHITE = RGBA(1, 1);
-const RGBA RED   = RGBA(1, 0, 0, 1);
-const RGBA GREEN = RGBA(0, 1, 0, 1);
-const RGBA BLUE  = RGBA(0, 0, 1, 1);
+RGBA& RGBA::operator /= (const RGBA & rhs)
+{
+	red /= rhs.red;
+	green /= rhs.green;
+	blue /= rhs.blue;
+	return *this;
+}
+
+RGBA& operator / (RGBA & lhs, const RGBA & rhs)
+{
+	return lhs /= rhs;
+}
+
+// Preset colors
+static const RGBA BLACK = RGBA(0, 1);
+static const RGBA WHITE = RGBA(1, 1);
+static const RGBA RED   = RGBA(1, 0, 0, 1);
+static const RGBA GREEN = RGBA(0, 1, 0, 1);
+static const RGBA BLUE  = RGBA(0, 0, 1, 1);
 
 TGA::TGA(const std::string& path)
 {
@@ -175,11 +192,11 @@ void TGA::parse(const std::string& path)
 		//TODO Check file extension
 
 		// The file is open with the ios::ate flag, so this call will directly obtain the size of the file
-		buffer_size = ifs.tellg();
+		buffer_size = static_cast<int>(ifs.tellg());
 		// We can now use the size to allocate a buffer into which we'll store the file data
 		in_buffer = new uint8_t[buffer_size];
-		ifs.seekg(0, ios::beg);
-		ifs.read(in_buffer, buffer_size);
+		ifs.seekg(0, std::ios::beg);
+		ifs.read(reinterpret_cast<char*>(in_buffer), buffer_size);
 		ifs.close();
 
 		// The order of these 3 function calls is mandatory
@@ -207,7 +224,7 @@ void TGA::write(const std::string& path)
 		write_data();
 		write_footer();
 
-		ofs.write(out_buffer, buffer_size);
+		ofs.write(reinterpret_cast<char*>(out_buffer), buffer_size);
 		ofs.close();
 
 		delete[] out_buffer;
@@ -227,7 +244,7 @@ void TGA::blur(float factor)
 	
 	// Linear interpolation between RANGE1(factor): 0 < x < 1 and RANGE2(kernel diameter): 
 	// 0 < y < min(image_width, image_height)
-	int kernel_size_range = min(image_height, image_width);
+	int kernel_size_range = std::min(image_height, image_width);
 	int kernel_size = static_cast<int>(round(kernel_size_range * factor));
 
 	if (kernel_size % 2 == 0)
@@ -241,8 +258,9 @@ void TGA::blur(float factor)
 		return;
 	}
 
-	const int pad = ceil(kernel_size / 2);
+	const int pad = static_cast<int>(ceil(kernel_size / 2));
 	RGBA* padded_img = get_mirror_padded_image(pad);
+
 	if (padded_img && pixels)
 	{
 		// Summed Area Table algorithm (using dynamic programming)
@@ -277,14 +295,20 @@ void TGA::blur(float factor)
 		}
 
 		// Filtering the image using a constant value (of 1) kernel
-		for (int i = 0; i < image_width; i++)
+		for (int i = 0, ii = pad; i < image_height && ii < image_height + pad; i++, ii++)
 		{
-			for (int j = 0; j < image_height; j++)
+			for (int j = 0, jj = pad; j < image_width && jj < image_width + pad; j++, jj++)
 			{
-				pixels[i * image_width + j] = ;
+				pixels[i * image_width + j] = padded_img[(ii + pad - 1) * image_width + (jj + pad - 1)] + 
+											  padded_img[(ii - pad) * image_width + (jj - pad)] - 
+											  padded_img[(ii + pad - 1) * image_width + (jj - pad)] - 
+											  padded_img[(ii - pad) * image_width + (jj + pad - 1)];
+				pixels[i * image_width + j] /= RGBA(static_cast<float>(kernel_size * kernel_size), 1.f);
 			}
 		}
 	}
+
+	delete[] padded_img;
 }
 
 const std::string TGA::SIGNATURE                     = "TRUEVISION-XFILE";
@@ -338,11 +362,15 @@ void TGA::parse_header()
 	}
 	if (header.pixel_depth != 24 && header.pixel_depth != 32)
 	{
-		throw std::domain_error(std::format("{d}bit pixel depth images are not currently supported", header.pixel_depth));
+		char buffer[50];
+		sprintf_s(buffer, "%dbit pixel depth images are not currently supported", header.pixel_depth);
+		throw std::domain_error(buffer);
 	}
-	if (get_image_type() != TGAImageType::TRUE_COLOR /*TODO&& get_image_type() != TGAImageType::TRUE_COLOR_RLE*/)
+	if (get_image_type() != TGAImageType::TRUE_COLOR)
 	{
-		throw std::domain_error(std::format("{} image type is not currently supported", get_image_type_name()));
+		char buffer[50];
+		sprintf_s(buffer, "%s image type is not currently supported", get_image_type_name().c_str());
+		throw std::domain_error(buffer);
 	}
 }
 
@@ -356,7 +384,8 @@ void TGA::parse_data()
 	if (header.color_map_type != 0) // Skipping color map data field
 	{
 		// When need to ceil to get the right amount of bytes because the number of bits may be 15
-		start_offset += static_cast<int>(header.color_map_length) * ceil(static_cast<int>(header.color_map_entry_size) / 8);
+		start_offset += static_cast<int>(header.color_map_length) * 
+						static_cast<int>(ceil(static_cast<int>(header.color_map_entry_size) / 8));
 	}
 
 	if (get_image_type() == TGAImageType::TRUE_COLOR)
@@ -367,11 +396,11 @@ void TGA::parse_data()
 
 		pixels = new RGBA[image_width * image_height];
 
-		int i = vert_orient == TGAVertOrientation::TOP_DOWN ? 0 : image_height - 1;
-		while (i != vert_orient == TGAVertOrientation::TOP_DOWN ? image_height : -1)
+		int i = (vert_orient == TGAVertOrientation::TOP_DOWN ? 0 : image_height - 1);
+		while (i != (vert_orient == TGAVertOrientation::TOP_DOWN ? image_height : -1))
 		{
-			int j = horiz_orient == TGAHorizOrientation::LEFT_TO_RIGHT ? 0 : image_width - 1;
-			while (j != horiz_orient == TGAHorizOrientation::LEFT_TO_RIGHT ? image_width : -1)
+			int j = (horiz_orient == TGAHorizOrientation::LEFT_TO_RIGHT ? 0 : image_width - 1);
+			while (j != (horiz_orient == TGAHorizOrientation::LEFT_TO_RIGHT ? image_width : -1))
 			{
 				const int curr_pixel_offset = start_offset + (i * image_width + j) * bytes_per_pixel;
 				if (pixels)
@@ -391,12 +420,6 @@ void TGA::parse_data()
 			vert_orient == TGAVertOrientation::TOP_DOWN ? i++ : i--;
 		}
 	}
-	/* TODO
-	else if (get_image_type() == TGAImageType::TRUE_COLOR_RLE)
-	{
-
-	}
-	*/
 }
 
 void TGA::parse_footer()
@@ -404,8 +427,8 @@ void TGA::parse_footer()
 	//TODO Control if the code is robust enough for the errors that could arise
 	if (in_buffer)
 	{
-		footer.signature = std::string(static_cast<const char*>(in_buffer[buffer_size - 18]), SIGNATURE_SIZE);
-		format = strcmp(footer.signature, SIGNATURE) ? TGAFormat::NEW : TGAFormat::ORIGIN;
+		footer.signature = std::string(static_cast<char>(in_buffer[buffer_size - 18]), SIGNATURE_SIZE);
+		format = (footer.signature == SIGNATURE ? TGAFormat::NEW : TGAFormat::ORIGIN);
 		if (format == TGAFormat::NEW)
 		{
 			footer.ext_area_offset = static_cast<uint32_t>(in_buffer[buffer_size - 26])
@@ -417,11 +440,6 @@ void TGA::parse_footer()
 				                   | static_cast<uint32_t>(in_buffer[buffer_size - 20] << 16)
 				                   | static_cast<uint32_t>(in_buffer[buffer_size - 19] << 24);
 		}
-	}
-
-	if ()
-	{
-		throw std::domain_error("MEGA FAGGOTTO");
 	}
 }
 
@@ -474,7 +492,7 @@ void TGA::write_data()
 	if (header.color_map_type != 0) // Skipping color map data field
 	{
 		// When need to ceil to get the right amount of bytes because the number of bits may be 15
-		start_offset += static_cast<int>(header.color_map_length) * ceil(static_cast<int>(header.color_map_entry_size) / 8);
+		start_offset += static_cast<int>(header.color_map_length) * static_cast<int>(ceil(static_cast<int>(header.color_map_entry_size) / 8));
 	}
 
 	if (get_image_type() == TGAImageType::TRUE_COLOR)
@@ -483,11 +501,11 @@ void TGA::write_data()
 		const int image_height = static_cast<int>(header.image_height);
 		const int bytes_per_pixel = header.pixel_depth / 8;
 
-		int i = vert_orient == TGAVertOrientation::TOP_DOWN ? 0 : image_height - 1;
-		while (i != vert_orient == TGAVertOrientation::TOP_DOWN ? image_height : -1)
+		int i = (vert_orient == TGAVertOrientation::TOP_DOWN ? 0 : image_height - 1);
+		while (i != (vert_orient == TGAVertOrientation::TOP_DOWN ? image_height : -1))
 		{
-			int j = horiz_orient == TGAHorizOrientation::LEFT_TO_RIGHT ? 0 : image_width - 1;
-			while (j != horiz_orient == TGAHorizOrientation::LEFT_TO_RIGHT ? image_width : -1)
+			int j = (horiz_orient == TGAHorizOrientation::LEFT_TO_RIGHT ? 0 : image_width - 1);
+			while (j != (horiz_orient == TGAHorizOrientation::LEFT_TO_RIGHT ? image_width : -1))
 			{
 				const int curr_pixel_offset = start_offset + (i * image_width + j) * bytes_per_pixel;
 				if (out_buffer && pixels)
@@ -512,12 +530,6 @@ void TGA::write_data()
 			vert_orient == TGAVertOrientation::TOP_DOWN ? i++ : i--;
 		}
 	}
-	/* TODO
-	else if (get_image_type() == TGAImageType::TRUE_COLOR_RLE)
-	{
-
-	}
-	*/
 }
 
 void TGA::write_footer()
@@ -535,7 +547,7 @@ void TGA::write_footer()
 			out_buffer[buffer_size - 21] = static_cast<uint8_t>((footer.dev_dir_offset >> 8) & 0x000000FF);
 			out_buffer[buffer_size - 20] = static_cast<uint8_t>((footer.dev_dir_offset >> 16) & 0x000000FF);
 			out_buffer[buffer_size - 19] = static_cast<uint8_t>((footer.dev_dir_offset >> 24) & 0x000000FF);
-			for (int i = 0, int j = buffer_size - 18; i < SIGNATURE_SIZE; i++, j++)
+			for (int i = 0, j = buffer_size - 18; i < SIGNATURE_SIZE; i++, j++)
 			{
 				out_buffer[j] = static_cast<uint8_t>(footer.signature[i]);
 			}
@@ -543,24 +555,4 @@ void TGA::write_footer()
 			out_buffer[buffer_size - 1] = 0x00;
 		}
 	}
-}
-
-
-int main(int argc, char **argv)
-{
-	//TODO Add option parameters and error checking for them as well
-	try
-	{
-		TGA* img = new TGA(/*ROBO BITCH*/);
-		return 0;
-
-		// MEGA FAGGOT
-	}
-	catch (std::exception &e)
-	{
-		std::cerr << "Caught: " << e.what() << std::endl;
-		std::cerr << "Type: " << typeid(e).name() << std::endl;
-
-		return 1;
-	};
 }

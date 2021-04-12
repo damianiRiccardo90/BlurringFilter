@@ -1,7 +1,7 @@
-#include <fstream> 
-#include <stdexcept>
+#pragma once
 
-using std::fstream
+#include <stdint.h>
+#include <string>
 
 
 struct RGBA
@@ -18,19 +18,14 @@ struct RGBA
 	friend RGBA& operator - (RGBA& lhs, const RGBA& rhs);
 	RGBA& operator *= (const RGBA& rhs);
 	friend RGBA& operator * (RGBA& lhs, const RGBA& rhs);
+	RGBA& operator /= (const RGBA& rhs);
+	friend RGBA& operator / (RGBA& lhs, const RGBA& rhs);
 
 	float red; 
 	float green; 
 	float blue;
 	float alpha;
 };
-
-// Preset colors
-static const RGBA BLACK;
-static const RGBA WHITE;
-static const RGBA RED;
-static const RGBA GREEN;
-static const RGBA BLUE;
 
 enum class TGAFormat : uint8_t
 {
@@ -64,7 +59,6 @@ enum class TGAVertOrientation : uint8_t
 	NONE
 };
 
-// Based on https://en.wikipedia.org/wiki/Truevision_TGA#Header
 struct TGAHeader
 {
 	uint8_t  id_length;
@@ -126,8 +120,8 @@ private:
 	void write_data();
 	void write_footer();
 
-	const uint8_t* in_buffer = nullptr;
-	const uint8_t* out_buffer = nullptr;
+	uint8_t* in_buffer = nullptr;
+	uint8_t* out_buffer = nullptr;
 	int buffer_size;
 
 	TGAFormat format = TGAFormat::NONE;
@@ -138,5 +132,5 @@ private:
 	TGAHeader header;
 	TGAFooter footer;
 	
-	RGBA* pixels = nullptr; // 1D array of pixels
+	RGBA* pixels = nullptr;
 };
