@@ -133,7 +133,7 @@ RGBA* TGA::get_mirror_padded_image(const int pad) const
 
 	const int padded_img_height = image_height + 2 * pad;
 	const int padded_img_width = image_width + 2 * pad;
-	RGBA* padded_img = new RGBA[padded_img_width * padded_img_height];
+	RGBA* padded_img = new RGBA[padded_img_height * padded_img_width];
 	if (padded_img && pixels)
 	{
 		for (int i = 0; i < padded_img_height; i++)
@@ -299,10 +299,15 @@ void TGA::blur(float factor)
 		{
 			for (int j = 0, jj = pad; j < image_width && jj < image_width + pad; j++, jj++)
 			{
-				pixels[i * image_width + j] = padded_img[(ii + pad - 1) * image_width + (jj + pad - 1)] + 
+				/*pixels[i * image_width + j] = padded_img[(ii + pad - 1) * image_width + (jj + pad - 1)] + 
 											  padded_img[(ii - pad) * image_width + (jj - pad)] - 
 											  padded_img[(ii + pad - 1) * image_width + (jj - pad)] - 
-											  padded_img[(ii - pad) * image_width + (jj + pad - 1)];
+											  padded_img[(ii - pad) * image_width + (jj + pad - 1)];*/
+				const int bottom_right = 
+				pixels[i * image_width + j] = padded_img[(ii + pad - 1) * image_width + (jj + pad - 1)] +
+											padded_img[(ii - pad) * image_width + (jj - pad)] -
+											padded_img[(ii + pad - 1) * image_width + (jj - pad)] -
+											padded_img[(ii - pad) * image_width + (jj + pad - 1)];
 				pixels[i * image_width + j] /= RGBA(static_cast<float>(kernel_size * kernel_size), 1.f);
 			}
 		}
@@ -362,13 +367,13 @@ void TGA::parse_header()
 	}
 	if (header.pixel_depth != 24 && header.pixel_depth != 32)
 	{
-		char buffer[50];
+		char buffer[100];
 		sprintf_s(buffer, "%dbit pixel depth images are not currently supported", header.pixel_depth);
 		throw std::domain_error(buffer);
 	}
 	if (get_image_type() != TGAImageType::TRUE_COLOR)
 	{
-		char buffer[50];
+		char buffer[100];
 		sprintf_s(buffer, "%s image type is not currently supported", get_image_type_name().c_str());
 		throw std::domain_error(buffer);
 	}
@@ -396,28 +401,28 @@ void TGA::parse_data()
 
 		pixels = new RGBA[image_width * image_height];
 
-		int i = (vert_orient == TGAVertOrientation::TOP_DOWN ? 0 : image_height - 1);
-		while (i != (vert_orient == TGAVertOrientation::TOP_DOWN ? image_height : -1))
+		if (in_buffer && pixels)
 		{
-			int j = (horiz_orient == TGAHorizOrientation::LEFT_TO_RIGHT ? 0 : image_width - 1);
-			while (j != (horiz_orient == TGAHorizOrientation::LEFT_TO_RIGHT ? image_width : -1))
+			int i = (vert_orient == TGAVertOrientation::TOP_DOWN ? 0 : image_height - 1);
+			while (i != (vert_orient == TGAVertOrientation::TOP_DOWN ? image_height : -1))
 			{
-				const int curr_pixel_offset = start_offset + (i * image_width + j) * bytes_per_pixel;
-				if (pixels)
+				int j = (horiz_orient == TGAHorizOrientation::LEFT_TO_RIGHT ? 0 : image_width - 1);
+				while (j != (horiz_orient == TGAHorizOrientation::LEFT_TO_RIGHT ? image_width : -1))
 				{
+					const int curr_pixel_offset = start_offset + (i * image_width + j) * bytes_per_pixel;
 					// The order in which the color bytes are displaced is BGRA TODO ARE YOU SURE??
 					pixels[i * image_width + j] = RGBA(
-						(curr_pixel_offset + 2) / 255.f,
-						(curr_pixel_offset + 1) / 255.f,
-						curr_pixel_offset / 255.f,
-						bytes_per_pixel == 4 ? (curr_pixel_offset + 3) / 255.f : 1.f
+						static_cast<int>(in_buffer[curr_pixel_offset + 2]) / 255.f,
+						static_cast<int>(in_buffer[curr_pixel_offset + 1]) / 255.f,
+						static_cast<int>(in_buffer[curr_pixel_offset]) / 255.f,
+						bytes_per_pixel == 4 ? static_cast<int>(in_buffer[curr_pixel_offset + 3]) / 255.f : 1.f
 					);
+
+					horiz_orient == TGAHorizOrientation::LEFT_TO_RIGHT ? j++ : j--;
 				}
 
-				horiz_orient == TGAHorizOrientation::LEFT_TO_RIGHT ? j++ : j--;
+				vert_orient == TGAVertOrientation::TOP_DOWN ? i++ : i--;
 			}
-
-			vert_orient == TGAVertOrientation::TOP_DOWN ? i++ : i--;
 		}
 	}
 }
@@ -427,7 +432,7 @@ void TGA::parse_footer()
 	//TODO Control if the code is robust enough for the errors that could arise
 	if (in_buffer)
 	{
-		footer.signature = std::string(static_cast<char>(in_buffer[buffer_size - 18]), SIGNATURE_SIZE);
+		footer.signature = std::string(reinterpret_cast<const char*>(&in_buffer[buffer_size - 18]), SIGNATURE_SIZE);
 		format = (footer.signature == SIGNATURE ? TGAFormat::NEW : TGAFormat::ORIGIN);
 		if (format == TGAFormat::NEW)
 		{
@@ -501,15 +506,15 @@ void TGA::write_data()
 		const int image_height = static_cast<int>(header.image_height);
 		const int bytes_per_pixel = header.pixel_depth / 8;
 
-		int i = (vert_orient == TGAVertOrientation::TOP_DOWN ? 0 : image_height - 1);
-		while (i != (vert_orient == TGAVertOrientation::TOP_DOWN ? image_height : -1))
+		if (out_buffer && pixels)
 		{
-			int j = (horiz_orient == TGAHorizOrientation::LEFT_TO_RIGHT ? 0 : image_width - 1);
-			while (j != (horiz_orient == TGAHorizOrientation::LEFT_TO_RIGHT ? image_width : -1))
+			int i = (vert_orient == TGAVertOrientation::TOP_DOWN ? 0 : image_height - 1);
+			while (i != (vert_orient == TGAVertOrientation::TOP_DOWN ? image_height : -1))
 			{
-				const int curr_pixel_offset = start_offset + (i * image_width + j) * bytes_per_pixel;
-				if (out_buffer && pixels)
+				int j = (horiz_orient == TGAHorizOrientation::LEFT_TO_RIGHT ? 0 : image_width - 1);
+				while (j != (horiz_orient == TGAHorizOrientation::LEFT_TO_RIGHT ? image_width : -1))
 				{
+					const int curr_pixel_offset = start_offset + (i * image_width + j) * bytes_per_pixel;
 					// The order in which the color bytes are displaced is BGRA TODO ARE YOU SURE??
 					out_buffer[curr_pixel_offset] = static_cast<uint8_t>(std::min(1.f, pixels[i * image_width + j].blue) * 255.f);
 					out_buffer[curr_pixel_offset + 1] = static_cast<uint8_t>(std::min(1.f, pixels[i * image_width + j].green) * 255.f);
@@ -518,16 +523,12 @@ void TGA::write_data()
 					{
 						out_buffer[curr_pixel_offset + 3] = static_cast<uint8_t>(std::min(1.f, pixels[i * image_width + j].alpha) * 255.f);
 					}
-					else
-					{
-						out_buffer[curr_pixel_offset + 3] = 0xFF;
-					}
+
+					horiz_orient == TGAHorizOrientation::LEFT_TO_RIGHT ? j++ : j--;
 				}
 
-				horiz_orient == TGAHorizOrientation::LEFT_TO_RIGHT ? j++ : j--;
+				vert_orient == TGAVertOrientation::TOP_DOWN ? i++ : i--;
 			}
-
-			vert_orient == TGAVertOrientation::TOP_DOWN ? i++ : i--;
 		}
 	}
 }

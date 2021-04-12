@@ -14,9 +14,9 @@ int main(int argc, char** argv)
 		std::string in_file_path, out_file_path;
 		float factor;
 
-		if (args.size() != 3)
+		if (args.size() != 6)
 		{
-			char buffer[50];
+			char buffer[100];
 			sprintf_s(buffer, "Error: Found %d arguments, a number of 3 is expected", args.size());
 			throw std::invalid_argument(buffer);
 		}

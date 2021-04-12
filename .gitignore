@@ -19,3 +19,9 @@
 *.filters
 *.vcxproj
 *.sln
+*.exe
+*.metagen
+enc_temp_folder/a5a39f41209c486f4cf7547d88d4b7d7/BlurringFilter.cpp
+*.ilk
+*.enc
+*.idb

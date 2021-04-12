@@ -122,7 +122,7 @@ private:
 
 	uint8_t* in_buffer = nullptr;
 	uint8_t* out_buffer = nullptr;
-	int buffer_size;
+	int buffer_size = 0;
 
 	TGAFormat format = TGAFormat::NONE;
 	TGAImageType image_type = TGAImageType::EMPTY;
