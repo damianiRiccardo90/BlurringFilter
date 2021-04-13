@@ -17,7 +17,7 @@ int main(int argc, char** argv)
 		if (args.size() != 6)
 		{
 			char buffer[100];
-			sprintf_s(buffer, "Error: Found %d arguments, a number of 3 is expected", args.size());
+			sprintf_s(buffer, "Error: Found %d arguments, a number of 3 is expected", static_cast<int>(args.size()));
 			throw std::invalid_argument(buffer);
 		}
 

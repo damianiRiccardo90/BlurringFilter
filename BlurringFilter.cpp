@@ -5,10 +5,12 @@
 #include <string>
 #include <algorithm>
 
+#include <iostream>
+
 
 RGBA::RGBA() : red(0.f), green(0.f), blue(0.f), alpha(1.f) {}
-RGBA::RGBA(float c, float a) : red(c), green(c), blue(c), alpha(a) {}
-RGBA::RGBA(float r, float g, float b, float a) : red(r), green(g), blue(b), alpha(a) {}
+RGBA::RGBA(double c, double a) : red(c), green(c), blue(c), alpha(a) {}
+RGBA::RGBA(double r, double g, double b, double a) : red(r), green(g), blue(b), alpha(a) {}
 
 bool operator == (const RGBA& lhs, const RGBA& rhs)
 {
@@ -60,7 +62,7 @@ RGBA& operator * (RGBA& lhs, const RGBA& rhs)
 	return lhs *= rhs;
 }
 
-RGBA& RGBA::operator /= (const RGBA & rhs)
+RGBA& RGBA::operator /= (const RGBA& rhs)
 {
 	red /= rhs.red;
 	green /= rhs.green;
@@ -261,6 +263,30 @@ void TGA::blur(float factor)
 	const int pad = static_cast<int>(ceil(kernel_size / 2));
 	RGBA* padded_img = get_mirror_padded_image(pad);
 
+	// Unoptimized algorithm version for sanity check
+// 	const int padded_img_height = image_height + 2 * pad;
+// 	const int padded_img_width = image_width + 2 * pad;
+// 	if (padded_img && pixels)
+// 	{
+// 		for (int i = 0; i < image_height; i++)
+// 		{
+// 			for (int j = 0; j < image_width; j++)
+// 			{
+// 				RGBA sum = RGBA(0.f, 1.f);
+// 				for (int ii = pad + i - (pad - 1); ii < i + kernel_size; ii++)
+// 				{
+// 					for (int jj = pad + j - (pad - 1); jj < j + kernel_size; jj++)
+// 					{
+// 						sum += padded_img[ii * padded_img_width + jj];
+// 					}
+// 				}
+// 				RGBA sega_john = sum / RGBA(kernel_size * kernel_size, 1.f);
+// 				pixels[i * image_width + j] = sega_john;
+// 			}
+// 		}
+// 	}
+
+	
 	if (padded_img && pixels)
 	{
 		// Summed Area Table algorithm (using dynamic programming)
@@ -272,20 +298,20 @@ void TGA::blur(float factor)
 			{
 				if (i > 0 && j > 0)
 				{
-					padded_img[i * padded_img_width + j] = padded_img[i * padded_img_width + j] +
-														   padded_img[(i - 1) * padded_img_width + j] +
-														   padded_img[i * padded_img_width + (j - 1)] -
-														   padded_img[(i - 1) * padded_img_width + (j - 1)];
+ 					padded_img[i * padded_img_width + j] = padded_img[i * padded_img_width + j] +
+ 														   padded_img[(i - 1) * padded_img_width + j] +
+ 														   padded_img[i * padded_img_width + (j - 1)] -
+ 														   padded_img[(i - 1) * padded_img_width + (j - 1)];
 				}
 				else if (i > 0 && j == 0)
 				{
-					padded_img[i * padded_img_width + j] = padded_img[i * padded_img_width + j] +
-														   padded_img[(i - 1) * padded_img_width + j];
+ 					padded_img[i * padded_img_width + j] = padded_img[i * padded_img_width + j] +
+ 														   padded_img[(i - 1) * padded_img_width + j];
 				}
 				else if (j > 0 && i == 0)
 				{
-					padded_img[i * padded_img_width + j] = padded_img[i * padded_img_width + j] +
-														   padded_img[i * padded_img_width + (j - 1)];
+ 					padded_img[i * padded_img_width + j] = padded_img[i * padded_img_width + j] +
+ 														   padded_img[i * padded_img_width + (j - 1)];
 				}
 				else
 				{
@@ -295,20 +321,17 @@ void TGA::blur(float factor)
 		}
 
 		// Filtering the image using a constant value (of 1) kernel
-		for (int i = 0, ii = pad; i < image_height && ii < image_height + pad; i++, ii++)
+		for (int i = 0, ii = pad; i < image_height; i++, ii++)
 		{
-			for (int j = 0, jj = pad; j < image_width && jj < image_width + pad; j++, jj++)
+			for (int j = 0, jj = pad; j < image_width; j++, jj++)
 			{
-				/*pixels[i * image_width + j] = padded_img[(ii + pad - 1) * image_width + (jj + pad - 1)] + 
-											  padded_img[(ii - pad) * image_width + (jj - pad)] - 
-											  padded_img[(ii + pad - 1) * image_width + (jj - pad)] - 
-											  padded_img[(ii - pad) * image_width + (jj + pad - 1)];*/
-				const int bottom_right = 
-				pixels[i * image_width + j] = padded_img[(ii + pad - 1) * image_width + (jj + pad - 1)] +
-											padded_img[(ii - pad) * image_width + (jj - pad)] -
-											padded_img[(ii + pad - 1) * image_width + (jj - pad)] -
-											padded_img[(ii - pad) * image_width + (jj + pad - 1)];
-				pixels[i * image_width + j] /= RGBA(static_cast<float>(kernel_size * kernel_size), 1.f);
+				const int bottom_right = (ii + pad - 1) * padded_img_width + (jj + pad - 1);
+				const int top_left = (ii - pad) * padded_img_width + (jj - pad);
+				const int bottom_left = (ii + pad - 1) * padded_img_width + (jj - pad);
+				const int top_right = (ii - pad) * padded_img_width + (jj + pad - 1);
+ 				pixels[i * image_width + j] = padded_img[bottom_right] + padded_img[top_left] -
+ 											  padded_img[bottom_left] -	padded_img[top_right];
+				pixels[i * image_width + j] /= RGBA(kernel_size * kernel_size, 1.f);
 			}
 		}
 	}
@@ -345,7 +368,7 @@ void TGA::parse_header()
 	}
 
 	image_type = static_cast<TGAImageType>(header.image_type);
-	horiz_orient = (header.image_descriptor & 0x10) == 0 ? TGAHorizOrientation::RIGHT_TO_LEFT : TGAHorizOrientation::LEFT_TO_RIGHT;
+	horiz_orient = (header.image_descriptor & 0x10) == 0 ? TGAHorizOrientation::LEFT_TO_RIGHT : TGAHorizOrientation::RIGHT_TO_LEFT;
 	vert_orient = (header.image_descriptor & 0x20) == 0 ? TGAVertOrientation::BOTTOM_UP : TGAVertOrientation::TOP_DOWN;
 
 	// Error checking
@@ -500,6 +523,19 @@ void TGA::write_data()
 		start_offset += static_cast<int>(header.color_map_length) * static_cast<int>(ceil(static_cast<int>(header.color_map_entry_size) / 8));
 	}
 
+	/*
+	for (int i = 0; i < static_cast<int>(header.image_height); i++)
+	{
+		for (int j = 0; j < static_cast<int>(header.image_width); j++)
+		{
+			std::cout << pixels[i * static_cast<int>(header.image_width) + j].red << " ";
+			std::cout << pixels[i * static_cast<int>(header.image_width) + j].green << " ";
+			std::cout << pixels[i * static_cast<int>(header.image_width) + j].blue << " ";
+			std::cout << std::endl;
+		}
+	}
+	*/
+
 	if (get_image_type() == TGAImageType::TRUE_COLOR)
 	{
 		const int image_width = static_cast<int>(header.image_width);
@@ -516,12 +552,12 @@ void TGA::write_data()
 				{
 					const int curr_pixel_offset = start_offset + (i * image_width + j) * bytes_per_pixel;
 					// The order in which the color bytes are displaced is BGRA TODO ARE YOU SURE??
-					out_buffer[curr_pixel_offset] = static_cast<uint8_t>(std::min(1.f, pixels[i * image_width + j].blue) * 255.f);
-					out_buffer[curr_pixel_offset + 1] = static_cast<uint8_t>(std::min(1.f, pixels[i * image_width + j].green) * 255.f);
-					out_buffer[curr_pixel_offset + 2] = static_cast<uint8_t>(std::min(1.f, pixels[i * image_width + j].red) * 255.f);
+					out_buffer[curr_pixel_offset] = static_cast<uint8_t>(std::min(1., pixels[i * image_width + j].blue) * 255.f);
+					out_buffer[curr_pixel_offset + 1] = static_cast<uint8_t>(std::min(1., pixels[i * image_width + j].green) * 255.f);
+					out_buffer[curr_pixel_offset + 2] = static_cast<uint8_t>(std::min(1., pixels[i * image_width + j].red) * 255.f);
 					if (bytes_per_pixel == 4)
 					{
-						out_buffer[curr_pixel_offset + 3] = static_cast<uint8_t>(std::min(1.f, pixels[i * image_width + j].alpha) * 255.f);
+						out_buffer[curr_pixel_offset + 3] = static_cast<uint8_t>(std::min(1., pixels[i * image_width + j].alpha) * 255.f);
 					}
 
 					horiz_orient == TGAHorizOrientation::LEFT_TO_RIGHT ? j++ : j--;

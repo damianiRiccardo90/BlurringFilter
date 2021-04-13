@@ -7,8 +7,8 @@
 struct RGBA
 {
 	RGBA();
-	RGBA(float c, float a);
-	RGBA(float r, float g, float b, float a);
+	RGBA(double c, double a);
+	RGBA(double r, double g, double b, double a);
 
 	friend bool operator == (const RGBA& lhs, const RGBA& rhs);
 	friend bool operator != (const RGBA& lhs, const RGBA& rhs);
@@ -21,10 +21,10 @@ struct RGBA
 	RGBA& operator /= (const RGBA& rhs);
 	friend RGBA& operator / (RGBA& lhs, const RGBA& rhs);
 
-	float red; 
-	float green; 
-	float blue;
-	float alpha;
+	double red;
+	double green;
+	double blue;
+	double alpha;
 };
 
 enum class TGAFormat : uint8_t
