@@ -13,13 +13,13 @@ struct RGBA
 	friend bool operator == (const RGBA& lhs, const RGBA& rhs);
 	friend bool operator != (const RGBA& lhs, const RGBA& rhs);
 	RGBA& operator += (const RGBA& rhs);
-	friend RGBA& operator + (RGBA& lhs, const RGBA& rhs);
+	friend RGBA operator + (RGBA lhs, const RGBA& rhs);
 	RGBA& operator -= (const RGBA& rhs);
-	friend RGBA& operator - (RGBA& lhs, const RGBA& rhs);
+	friend RGBA operator - (RGBA lhs, const RGBA& rhs);
 	RGBA& operator *= (const RGBA& rhs);
-	friend RGBA& operator * (RGBA& lhs, const RGBA& rhs);
+	friend RGBA operator * (RGBA lhs, const RGBA& rhs);
 	RGBA& operator /= (const RGBA& rhs);
-	friend RGBA& operator / (RGBA& lhs, const RGBA& rhs);
+	friend RGBA operator / (RGBA lhs, const RGBA& rhs);
 
 	float red;
 	float green;
@@ -102,7 +102,6 @@ public:
 
 	void blur(float factor);
 
-	static const int MAX_KERNEL_SIZE;
 	static const std::string SIGNATURE;
 	static const int SIGNATURE_SIZE;
 	static const std::string TYPE_COLOR_MAPPED_NAME;

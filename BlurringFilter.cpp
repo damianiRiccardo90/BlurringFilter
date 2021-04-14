@@ -29,7 +29,7 @@ RGBA& RGBA::operator += (const RGBA& rhs)
 	return *this;
 }
 
-RGBA& operator + (RGBA& lhs, const RGBA& rhs)
+RGBA operator + (RGBA lhs, const RGBA& rhs)
 {
 	return lhs += rhs;
 }
@@ -42,7 +42,7 @@ RGBA& RGBA::operator -= (const RGBA& rhs)
 	return *this;
 }
 
-RGBA& operator - (RGBA& lhs, const RGBA& rhs)
+RGBA operator - (RGBA lhs, const RGBA& rhs)
 {
 	return lhs -= rhs;
 }
@@ -55,7 +55,7 @@ RGBA& RGBA::operator *= (const RGBA& rhs)
 	return *this;
 }
 
-RGBA& operator * (RGBA& lhs, const RGBA& rhs)
+RGBA operator * (RGBA lhs, const RGBA& rhs)
 {
 	return lhs *= rhs;
 }
@@ -68,7 +68,7 @@ RGBA& RGBA::operator /= (const RGBA& rhs)
 	return *this;
 }
 
-RGBA& operator / (RGBA & lhs, const RGBA & rhs)
+RGBA operator / (RGBA lhs, const RGBA & rhs)
 {
 	return lhs /= rhs;
 }
@@ -227,9 +227,11 @@ void TGA::blur(float factor)
 		throw std::invalid_argument("Invalid blur factor (it needs to be in the 0 < f < 1 range)");
 	}
 	
-	// Linear interpolation between RANGE1(factor): 0 < x < 1 and RANGE2(kernel diameter): 0 < y < MAX_KERNEL_SIZE
-	// TODO 0 to 50? Or 0 to min(size_h, sizer_w) / 2 ?
-	int kernel_size = static_cast<int>(round(MAX_KERNEL_SIZE * factor));
+	// Linear interpolation between 0 < x < 1 and 0 < y < min(image_height, image_width) / 2
+	const int image_height = static_cast<int>(header.image_height);
+	const int image_width = static_cast<int>(header.image_width);
+	const int max_kernel_size = std::min(image_height, image_width) / 2;
+	int kernel_size = static_cast<int>(round(max_kernel_size * factor));
 
 	if (kernel_size % 2 == 0)
 	{
@@ -242,10 +244,10 @@ void TGA::blur(float factor)
 		return;
 	}
 
-	const int pad = static_cast<int>(floor(kernel_size / 2));
+	const int pad = static_cast<int>(std::floor(kernel_size / 2));
 	RGBA* padded_img = get_mirror_padded_image(pad);
 
-	/* Trivial unoptimized box blur algorithm version
+	/* Trivial unoptimized box blur algorithm version, for sanity checking
 	const int padded_img_height = image_height + 2 * pad;
 	const int padded_img_width = image_width + 2 * pad;
 	if (padded_img && pixels)
@@ -269,13 +271,11 @@ void TGA::blur(float factor)
 	}*/
 
 	// Box blur with separated filter (spanning rows and columns separately) and moving average optimization
-	const int image_height = static_cast<int>(header.image_height);
-	const int image_width = static_cast<int>(header.image_width);
 	const int padded_img_height = image_height + 2 * pad;
 	const int padded_img_width = image_width + 2 * pad;
 	RGBA* tmp = new RGBA[padded_img_height * padded_img_width];
 	std::copy(padded_img, padded_img + (padded_img_height * padded_img_width), tmp);
-	for (int i = 0; i < image_height; i++) // Row index
+	for (int i = 0; i < padded_img_height; i++) // Row index
 	{
 		int j = pad; // Col index
 
@@ -288,7 +288,7 @@ void TGA::blur(float factor)
 			k++;
 		}
 
-		tmp[i * padded_img_width + j] = sum / RGBA(static_cast<float>(kernel_size), 1.f); // TODO CHECK THAT THIS OPERATION DOES NOT LOSE PRECISION!!! PORCODDIO!
+		tmp[i * padded_img_width + j] = sum / RGBA(kernel_size, 1.f);
 		j++;
 
 		while (j < image_width + pad)
@@ -296,14 +296,13 @@ void TGA::blur(float factor)
 			// Moving average
 			sum += padded_img[i * padded_img_width + k];
 			sum -= padded_img[i * padded_img_width + (k - kernel_size)];
-			tmp[i * padded_img_width + j] = sum / RGBA(static_cast<float>(kernel_size), 1.f);
+			tmp[i * padded_img_width + j] = sum / RGBA(kernel_size, 1.f);
 
 			k++;
 			j++;
 		}
 	}
 
-	// Do the same for the columns, and UPDATE THE ARRAY VALUES
 	for (int i = pad; i < image_width + pad; i++) // Col index
 	{
 		int j = pad; // Row index
@@ -318,7 +317,7 @@ void TGA::blur(float factor)
 		}
 
 		// Updating source pixel values
-		pixels[(j - pad) * image_width + (i - pad)] = sum / RGBA(static_cast<float>(kernel_size), 1.f);
+		pixels[(j - pad) * image_width + (i - pad)] = sum / RGBA(kernel_size, 1.f);
 		j++;
 
 		while (j < image_height + pad)
@@ -327,17 +326,19 @@ void TGA::blur(float factor)
 			sum += tmp[k * padded_img_width + i];
 			sum -= tmp[(k - kernel_size) * padded_img_width + i];
 			// Updating source pixel values
-			pixels[(j - pad) * image_width + (i - pad)] = sum / RGBA(static_cast<float>(kernel_size), 1.f);
+			pixels[(j - pad) * image_width + (i - pad)] = sum / RGBA(kernel_size, 1.f);
 
 			k++;
 			j++;
 		}
 	}
 
-	/* Box blur with precomputed SAT (Summed Area Table) optimization (I've not been able to make it work properly)
-	if (padded_img && pixels)
+	//Box blur with precomputed SAT (Summed Area Table) optimization (I've not been able to make it work 100%)
+	/*if (padded_img && pixels)
 	{
 		// Summed Area Table algorithm (using dynamic programming)
+		const int image_height = static_cast<int>(header.image_height);
+		const int image_width = static_cast<int>(header.image_width);
 		const int padded_img_height = image_height + 2 * pad;
 		const int padded_img_width = image_width + 2 * pad;
 		for (int i = 0; i < padded_img_height; i++)
@@ -382,13 +383,11 @@ void TGA::blur(float factor)
 				pixels[i * image_width + j] /= RGBA(kernel_size * kernel_size, 1.f);
 			}
 		}
-	}
 	}*/
 
 	delete[] padded_img;
 }
 
-const int TGA::MAX_KERNEL_SIZE						 = 30;
 const std::string TGA::SIGNATURE                     = "TRUEVISION-XFILE";
 const int TGA::SIGNATURE_SIZE                        = 16;
 const std::string TGA::TYPE_COLOR_MAPPED_NAME        = "Color mapped";
