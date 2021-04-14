@@ -7,8 +7,8 @@
 struct RGBA
 {
 	RGBA();
-	RGBA(double c, double a);
-	RGBA(double r, double g, double b, double a);
+	RGBA(float c, float a);
+	RGBA(float r, float g, float b, float a);
 
 	friend bool operator == (const RGBA& lhs, const RGBA& rhs);
 	friend bool operator != (const RGBA& lhs, const RGBA& rhs);
@@ -21,10 +21,10 @@ struct RGBA
 	RGBA& operator /= (const RGBA& rhs);
 	friend RGBA& operator / (RGBA& lhs, const RGBA& rhs);
 
-	double red;
-	double green;
-	double blue;
-	double alpha;
+	float red;
+	float green;
+	float blue;
+	float alpha;
 };
 
 enum class TGAFormat : uint8_t
@@ -102,6 +102,7 @@ public:
 
 	void blur(float factor);
 
+	static const int MAX_KERNEL_SIZE;
 	static const std::string SIGNATURE;
 	static const int SIGNATURE_SIZE;
 	static const std::string TYPE_COLOR_MAPPED_NAME;

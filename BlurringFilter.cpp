@@ -5,12 +5,10 @@
 #include <string>
 #include <algorithm>
 
-#include <iostream>
-
 
 RGBA::RGBA() : red(0.f), green(0.f), blue(0.f), alpha(1.f) {}
-RGBA::RGBA(double c, double a) : red(c), green(c), blue(c), alpha(a) {}
-RGBA::RGBA(double r, double g, double b, double a) : red(r), green(g), blue(b), alpha(a) {}
+RGBA::RGBA(float c, float a) : red(c), green(c), blue(c), alpha(a) {}
+RGBA::RGBA(float r, float g, float b, float a) : red(r), green(g), blue(b), alpha(a) {}
 
 bool operator == (const RGBA& lhs, const RGBA& rhs)
 {
@@ -75,13 +73,6 @@ RGBA& operator / (RGBA & lhs, const RGBA & rhs)
 	return lhs /= rhs;
 }
 
-// Preset colors
-static const RGBA BLACK = RGBA(0, 1);
-static const RGBA WHITE = RGBA(1, 1);
-static const RGBA RED   = RGBA(1, 0, 0, 1);
-static const RGBA GREEN = RGBA(0, 1, 0, 1);
-static const RGBA BLUE  = RGBA(0, 0, 1, 1);
-
 TGA::TGA(const std::string& path)
 {
 	parse(path);
@@ -124,8 +115,6 @@ std::string TGA::get_image_type_name() const
 
 RGBA* TGA::get_mirror_padded_image(const int pad) const
 {
-	//TODO Optimize using unsigned int and storing the info already casted in the header struct
-
 	const int image_height = static_cast<int>(header.image_height);
 	const int image_width = static_cast<int>(header.image_width);
 	if (pad > image_height || pad > image_width)
@@ -191,8 +180,6 @@ void TGA::parse(const std::string& path)
 	}
 	else
 	{
-		//TODO Check file extension
-
 		// The file is open with the ios::ate flag, so this call will directly obtain the size of the file
 		buffer_size = static_cast<int>(ifs.tellg());
 		// We can now use the size to allocate a buffer into which we'll store the file data
@@ -233,21 +220,16 @@ void TGA::write(const std::string& path)
 	}
 }
 
-// Blur the image using box blur algorithm (with precomputed SAT optimization)
 void TGA::blur(float factor)
 {
 	if (factor < 0.f || factor > 1.f)
 	{
 		throw std::invalid_argument("Invalid blur factor (it needs to be in the 0 < f < 1 range)");
 	}
-
-	const int image_height = static_cast<int>(header.image_height);
-	const int image_width = static_cast<int>(header.image_width);
 	
-	// Linear interpolation between RANGE1(factor): 0 < x < 1 and RANGE2(kernel diameter): 
-	// 0 < y < min(image_width, image_height)
-	int kernel_size_range = std::min(image_height, image_width);
-	int kernel_size = static_cast<int>(round(kernel_size_range * factor));
+	// Linear interpolation between RANGE1(factor): 0 < x < 1 and RANGE2(kernel diameter): 0 < y < MAX_KERNEL_SIZE
+	// TODO 0 to 50? Or 0 to min(size_h, sizer_w) / 2 ?
+	int kernel_size = static_cast<int>(round(MAX_KERNEL_SIZE * factor));
 
 	if (kernel_size % 2 == 0)
 	{
@@ -260,33 +242,99 @@ void TGA::blur(float factor)
 		return;
 	}
 
-	const int pad = static_cast<int>(ceil(kernel_size / 2));
+	const int pad = static_cast<int>(floor(kernel_size / 2));
 	RGBA* padded_img = get_mirror_padded_image(pad);
 
-	// Unoptimized algorithm version for sanity check
-// 	const int padded_img_height = image_height + 2 * pad;
-// 	const int padded_img_width = image_width + 2 * pad;
-// 	if (padded_img && pixels)
-// 	{
-// 		for (int i = 0; i < image_height; i++)
-// 		{
-// 			for (int j = 0; j < image_width; j++)
-// 			{
-// 				RGBA sum = RGBA(0.f, 1.f);
-// 				for (int ii = pad + i - (pad - 1); ii < i + kernel_size; ii++)
-// 				{
-// 					for (int jj = pad + j - (pad - 1); jj < j + kernel_size; jj++)
-// 					{
-// 						sum += padded_img[ii * padded_img_width + jj];
-// 					}
-// 				}
-// 				RGBA sega_john = sum / RGBA(kernel_size * kernel_size, 1.f);
-// 				pixels[i * image_width + j] = sega_john;
-// 			}
-// 		}
-// 	}
+	/* Trivial unoptimized box blur algorithm version
+	const int padded_img_height = image_height + 2 * pad;
+	const int padded_img_width = image_width + 2 * pad;
+	if (padded_img && pixels)
+	{
+		for (int i = 0; i < image_height; i++)
+		{
+			for (int j = 0; j < image_width; j++)
+			{
+				RGBA sum = RGBA(0.f, 1.f);
+				for (int ii = pad + i - (pad - 1); ii < i + kernel_size; ii++)
+				{
+					for (int jj = pad + j - (pad - 1); jj < j + kernel_size; jj++)
+					{
+						sum += padded_img[ii * padded_img_width + jj];
+					}
+				}
+				sum /= RGBA(kernel_size * kernel_size, 1.f);
+				pixels[i * image_width + j] = sum;
+			}
+		}
+	}*/
 
-	
+	// Box blur with separated filter (spanning rows and columns separately) and moving average optimization
+	const int image_height = static_cast<int>(header.image_height);
+	const int image_width = static_cast<int>(header.image_width);
+	const int padded_img_height = image_height + 2 * pad;
+	const int padded_img_width = image_width + 2 * pad;
+	RGBA* tmp = new RGBA[padded_img_height * padded_img_width];
+	std::copy(padded_img, padded_img + (padded_img_height * padded_img_width), tmp);
+	for (int i = 0; i < image_height; i++) // Row index
+	{
+		int j = pad; // Col index
+
+		// Initialize sum and fill the buffer for the first time before using the moving average
+		RGBA sum = RGBA(0.f, 1.f);
+		int k = 0;
+		while (k <= j + pad)
+		{
+			sum += padded_img[i * padded_img_width + k];
+			k++;
+		}
+
+		tmp[i * padded_img_width + j] = sum / RGBA(static_cast<float>(kernel_size), 1.f); // TODO CHECK THAT THIS OPERATION DOES NOT LOSE PRECISION!!! PORCODDIO!
+		j++;
+
+		while (j < image_width + pad)
+		{
+			// Moving average
+			sum += padded_img[i * padded_img_width + k];
+			sum -= padded_img[i * padded_img_width + (k - kernel_size)];
+			tmp[i * padded_img_width + j] = sum / RGBA(static_cast<float>(kernel_size), 1.f);
+
+			k++;
+			j++;
+		}
+	}
+
+	// Do the same for the columns, and UPDATE THE ARRAY VALUES
+	for (int i = pad; i < image_width + pad; i++) // Col index
+	{
+		int j = pad; // Row index
+
+		// Initialize sum and fill the buffer for the first time before using the moving average
+		RGBA sum = RGBA(0.f, 1.f);
+		int k = 0;
+		while (k <= j + pad)
+		{
+			sum += tmp[k * padded_img_width + i];
+			k++;
+		}
+
+		// Updating source pixel values
+		pixels[(j - pad) * image_width + (i - pad)] = sum / RGBA(static_cast<float>(kernel_size), 1.f);
+		j++;
+
+		while (j < image_height + pad)
+		{
+			// Moving average
+			sum += tmp[k * padded_img_width + i];
+			sum -= tmp[(k - kernel_size) * padded_img_width + i];
+			// Updating source pixel values
+			pixels[(j - pad) * image_width + (i - pad)] = sum / RGBA(static_cast<float>(kernel_size), 1.f);
+
+			k++;
+			j++;
+		}
+	}
+
+	/* Box blur with precomputed SAT (Summed Area Table) optimization (I've not been able to make it work properly)
 	if (padded_img && pixels)
 	{
 		// Summed Area Table algorithm (using dynamic programming)
@@ -335,10 +383,12 @@ void TGA::blur(float factor)
 			}
 		}
 	}
+	}*/
 
 	delete[] padded_img;
 }
 
+const int TGA::MAX_KERNEL_SIZE						 = 30;
 const std::string TGA::SIGNATURE                     = "TRUEVISION-XFILE";
 const int TGA::SIGNATURE_SIZE                        = 16;
 const std::string TGA::TYPE_COLOR_MAPPED_NAME        = "Color mapped";
@@ -350,7 +400,6 @@ const std::string TGA::TYPE_BLACK_AND_WHITE_RLE_NAME = "Black and white run-leng
 
 void TGA::parse_header()
 {
-	//TODO Control if the code is robust enough for the errors that could arise
 	if (in_buffer)
 	{
 		header.id_length            = in_buffer[0];
@@ -404,8 +453,6 @@ void TGA::parse_header()
 
 void TGA::parse_data()
 {
-	//TODO Control if the code is robust enough for the errors that could arise
-
 	// Computing the offset (from the start of the file) to the first byte of image data
 	int start_offset = 18; // Starting from the first byte after the header
 	start_offset += static_cast<int>(header.id_length); // Skipping image id field
@@ -433,7 +480,7 @@ void TGA::parse_data()
 				while (j != (horiz_orient == TGAHorizOrientation::LEFT_TO_RIGHT ? image_width : -1))
 				{
 					const int curr_pixel_offset = start_offset + (i * image_width + j) * bytes_per_pixel;
-					// The order in which the color bytes are displaced is BGRA TODO ARE YOU SURE??
+					// The order in which the color bytes are displaced is BGRA
 					pixels[i * image_width + j] = RGBA(
 						static_cast<int>(in_buffer[curr_pixel_offset + 2]) / 255.f,
 						static_cast<int>(in_buffer[curr_pixel_offset + 1]) / 255.f,
@@ -452,7 +499,6 @@ void TGA::parse_data()
 
 void TGA::parse_footer()
 {
-	//TODO Control if the code is robust enough for the errors that could arise
 	if (in_buffer)
 	{
 		footer.signature = std::string(reinterpret_cast<const char*>(&in_buffer[buffer_size - 18]), SIGNATURE_SIZE);
@@ -473,7 +519,6 @@ void TGA::parse_footer()
 
 void TGA::write_header()
 {
-	//TODO Control if the code is robust enough for the errors that could arise
 	if (out_buffer)
 	{
 		out_buffer[0] = header.id_length;
@@ -511,30 +556,15 @@ void TGA::write_header()
 
 void TGA::write_data()
 {
-	//TODO Control how to handle alpha byte (or bits)
-	//TODO Control if the code is robust enough for the errors that could arise
-
 	// Computing the offset (from the start of the file) to the first byte of image data
 	int start_offset = 18; // Starting from the first byte after the header
 	start_offset += static_cast<int>(header.id_length); // Skipping image id field
 	if (header.color_map_type != 0) // Skipping color map data field
 	{
 		// When need to ceil to get the right amount of bytes because the number of bits may be 15
-		start_offset += static_cast<int>(header.color_map_length) * static_cast<int>(ceil(static_cast<int>(header.color_map_entry_size) / 8));
+		start_offset += static_cast<int>(header.color_map_length) * 
+						static_cast<int>(ceil(static_cast<int>(header.color_map_entry_size) / 8));
 	}
-
-	/*
-	for (int i = 0; i < static_cast<int>(header.image_height); i++)
-	{
-		for (int j = 0; j < static_cast<int>(header.image_width); j++)
-		{
-			std::cout << pixels[i * static_cast<int>(header.image_width) + j].red << " ";
-			std::cout << pixels[i * static_cast<int>(header.image_width) + j].green << " ";
-			std::cout << pixels[i * static_cast<int>(header.image_width) + j].blue << " ";
-			std::cout << std::endl;
-		}
-	}
-	*/
 
 	if (get_image_type() == TGAImageType::TRUE_COLOR)
 	{
@@ -551,13 +581,13 @@ void TGA::write_data()
 				while (j != (horiz_orient == TGAHorizOrientation::LEFT_TO_RIGHT ? image_width : -1))
 				{
 					const int curr_pixel_offset = start_offset + (i * image_width + j) * bytes_per_pixel;
-					// The order in which the color bytes are displaced is BGRA TODO ARE YOU SURE??
-					out_buffer[curr_pixel_offset] = static_cast<uint8_t>(std::min(1., pixels[i * image_width + j].blue) * 255.f);
-					out_buffer[curr_pixel_offset + 1] = static_cast<uint8_t>(std::min(1., pixels[i * image_width + j].green) * 255.f);
-					out_buffer[curr_pixel_offset + 2] = static_cast<uint8_t>(std::min(1., pixels[i * image_width + j].red) * 255.f);
+					// The order in which the color bytes are displaced is BGRA
+					out_buffer[curr_pixel_offset] = static_cast<uint8_t>(std::min(1.f, pixels[i * image_width + j].blue) * 255.f);
+					out_buffer[curr_pixel_offset + 1] = static_cast<uint8_t>(std::min(1.f, pixels[i * image_width + j].green) * 255.f);
+					out_buffer[curr_pixel_offset + 2] = static_cast<uint8_t>(std::min(1.f, pixels[i * image_width + j].red) * 255.f);
 					if (bytes_per_pixel == 4)
 					{
-						out_buffer[curr_pixel_offset + 3] = static_cast<uint8_t>(std::min(1., pixels[i * image_width + j].alpha) * 255.f);
+						out_buffer[curr_pixel_offset + 3] = static_cast<uint8_t>(std::min(1.f, pixels[i * image_width + j].alpha) * 255.f);
 					}
 
 					horiz_orient == TGAHorizOrientation::LEFT_TO_RIGHT ? j++ : j--;
@@ -571,7 +601,6 @@ void TGA::write_data()
 
 void TGA::write_footer()
 {
-	//TODO Control if the code is robust enough for the errors that could arise
 	if (format == TGAFormat::NEW)
 	{
 		if (out_buffer)
